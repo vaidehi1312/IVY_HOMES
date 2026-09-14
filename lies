@@ -1,0 +1,128 @@
+[
+  {
+    "endpoint": "*",
+    "category": "auth",
+    "documented": "append your API key as ?api_key=... query parameter on every request",
+    "actual": "rejected with 401; key must go in an X-API-Key request header",
+    "how_found": "read the 401 error body instead of discarding it",
+    "impact": "every request built per the docs fails auth",
+    "evidence": []
+  },
+  {
+    "endpoint": "/auth/login",
+    "category": "auth",
+    "documented": "response has a `token` field; tokens last 24h; there is no refresh flow",
+    "actual": "response has `access_token` and `refresh_token` fields; `expires_in` is 900 (15 min); `/auth/refresh` exists and works",
+    "how_found": "printed the raw login response body",
+    "impact": "a frontend built to the docs would silently break 15 minutes in, failing the 'still working 30 minutes after login' requirement",
+    "evidence": []
+  },
+  {
+    "endpoint": "/v1/listings",
+    "category": "pagination",
+    "documented": "paginate with page & limit (max 200); response is {total, page, page_size, results}",
+    "actual": "pagination is offset-based; response is {limit, offset, count, total, has_more, results}; the page parameter is accepted with no error but silently ignored, always echoing offset=0; max limit is actually 50, not 200",
+    "how_found": "compared raw envelopes for page=1 vs page=2 and limit=50 vs limit=200 requests",
+    "impact": "any client built to spec never advances past the first 50 records; it silently re-fetches the same batch",
+    "evidence": ["MAG-1002627", "100-1003403", "MAG-1003078"]
+  },
+  {
+    "endpoint": "/v1/listings",
+    "category": "pagination",
+    "documented": "the collection response reports the exact total number of matching records",
+    "actual": "the response reports total=4422, but offset pagination returns 4700 unique listing records before has_more becomes false",
+    "how_found": "paged with offset until the server returned has_more=false and compared the count with total",
+    "impact": "clients trusting total stop early and miss 278 listings",
+    "evidence": ["ZER-1004440", "100-1003836", "SQU-1003024"]
+  },
+  {
+    "endpoint": "/v1/listing/{id}",
+    "category": "missing_endpoint",
+    "documented": "a single listing is available at /v1/listing/{listing_id}",
+    "actual": "the documented singular path returns 404; the working path is /v1/listings/{listing_id}",
+    "how_found": "requested both documented and plural paths for MAG-1002627",
+    "impact": "detail-page clients built to the documented path cannot load listings",
+    "evidence": ["MAG-1002627"]
+  },
+  {
+    "endpoint": "/v1/listings/{id}/similar",
+    "category": "missing_endpoint",
+    "documented": "returns up to ten comparable listings",
+    "actual": "the documented similar-listings path returns 404",
+    "how_found": "requested the path for MAG-1002627",
+    "impact": "the documented comparable-listings feature cannot be implemented against this route",
+    "evidence": ["MAG-1002627"]
+  },
+  {
+    "endpoint": "/v1/favourites",
+    "category": "missing_endpoint",
+    "documented": "logged-in users can list and save favourites",
+    "actual": "GET /v1/favourites returns 404, and the documented favourites resource is unavailable",
+    "how_found": "called it with a valid API key and bearer token",
+    "impact": "the documented saved-listings workflow cannot use this API",
+    "evidence": []
+  },
+  {
+    "endpoint": "/v1/analytics/summary",
+    "category": "missing_endpoint",
+    "documented": "returns pre-computed city aggregates",
+    "actual": "the endpoint returns 404 Not Found",
+    "how_found": "called it with a valid API key",
+    "impact": "a dashboard built from the documented analytics endpoint has no response to display",
+    "evidence": []
+  },
+  {
+    "endpoint": "/v1/listings",
+    "category": "completeness",
+    "documented": "returns active sale listings; inactive listings are excluded server side",
+    "actual": "the collection includes records with is_live=false",
+    "how_found": "inspected is_live across the full listing pull",
+    "impact": "clients must filter inactive records themselves",
+    "evidence": ["100-1003403", "100-1004588", "SQU-1000911", "ZER-1002667"]
+  },
+  {
+    "endpoint": "/v1/listings",
+    "category": "sorting",
+    "documented": "sort_by=price with order=asc or desc sorts by price",
+    "actual": "the first record is identical for price asc and price desc, so the price sort parameter is ignored",
+    "how_found": "compared the first response records for identical offset and limit with asc versus desc",
+    "impact": "users cannot reliably browse listings from cheapest to costliest or vice versa",
+    "evidence": ["100-1002346"]
+  },
+  {
+    "endpoint": "/v1/listings",
+    "category": "data_quality",
+    "documented": "money is an integer amount in Indian rupees",
+    "actual": "some listing price values are negative",
+    "how_found": "checked price values across the full listing pull",
+    "impact": "negative prices are impossible as sale prices and break totals, sorting, and display",
+    "evidence": ["ZER-1001207", "DWE-1001183", "SQU-1002843"]
+  },
+  {
+    "endpoint": "/v1/projects/{id}",
+    "category": "units",
+    "documented": "price_min and price_max are integer rupee amounts",
+    "actual": "project prices are decimal values such as price_min=1.04 and price_max=2.95, consistent with crore-scale values rather than integer rupees",
+    "how_found": "inspected project detail and collection records",
+    "impact": "displaying these values as rupees produces prices off by orders of magnitude",
+    "evidence": ["P10001", "P10002", "P10003"]
+  },
+  {
+    "endpoint": "/v1/rentals",
+    "category": "pagination",
+    "documented": "the collection response reports the exact total number of matching records",
+    "actual": "the response reports total=1788, but offset pagination returns 1900 unique rental records before has_more becomes false",
+    "how_found": "paged with offset until the server returned has_more=false and compared the count with total",
+    "impact": "clients trusting total stop early and miss 112 rentals",
+    "evidence": ["R1001801", "R1001850", "R1001900"]
+  },
+  {
+    "endpoint": "/v1/projects",
+    "category": "pagination",
+    "documented": "the collection response reports the exact total number of matching records",
+    "actual": "the response reports total=489, but offset pagination returns 520 unique projects before has_more becomes false",
+    "how_found": "paged with offset until the server returned has_more=false and compared the count with total",
+    "impact": "clients trusting total stop early and miss 31 projects",
+    "evidence": ["P10500", "P10501", "P10520"]
+  }
+]

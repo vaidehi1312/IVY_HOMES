@@ -1,0 +1,207 @@
+{
+  "api_key": "IVY26-6AFFD8E5918D",
+  "candidate": {
+    "name": "",
+    "email": "",
+    "repo_url": "",
+    "demo_url": "http://localhost:3000"
+  },
+  "answers": {
+    "total_listing_records": 4700,
+    "unique_properties": 4700,
+    "active_listings": 3722,
+    "corrupt_listing_ids": [
+      "100-1000035",
+      "100-1001077",
+      "100-1001141",
+      "100-1002346",
+      "100-1002442",
+      "100-1002600",
+      "100-1002884",
+      "100-1003117",
+      "DWE-1001165",
+      "DWE-1001183",
+      "DWE-1001909",
+      "DWE-1002892",
+      "DWE-1003673",
+      "MAG-1000179",
+      "MAG-1000885",
+      "MAG-1003269",
+      "MAG-1003510",
+      "SQU-1000394",
+      "SQU-1000979",
+      "SQU-1002298",
+      "SQU-1002843",
+      "SQU-1003177",
+      "SQU-1003370",
+      "ZER-1000430",
+      "ZER-1000500",
+      "ZER-1001207",
+      "ZER-1001249",
+      "ZER-1001334",
+      "ZER-1002632",
+      "ZER-1002667",
+      "ZER-1002911",
+      "ZER-1003426"
+    ],
+    "total_monthly_rent": 6851400,
+    "avg_price_per_sqft_2bhk": 21038.19,
+    "costliest_project": {
+      "project_id": "P10068",
+      "price_max_inr": 998000000
+    },
+    "listings_last_7_days": 149,
+    "fake_listing_ids": [
+      "100-1000078",
+      "100-1000107",
+      "100-1002306",
+      "100-1002382",
+      "100-1004448",
+      "DWE-1003361",
+      "MAG-1000227",
+      "MAG-1000447",
+      "MAG-1000952",
+      "MAG-1002208",
+      "MAG-1002601",
+      "SQU-1000124",
+      "SQU-1000211",
+      "SQU-1003746",
+      "ZER-1000837",
+      "ZER-1000893",
+      "ZER-1001952",
+      "ZER-1002198",
+      "ZER-1002200",
+      "ZER-1002642",
+      "ZER-1004489"
+    ],
+    "projects_with_wrong_listing_count": 127
+  },
+  "findings": [
+    {
+      "endpoint": "*",
+      "category": "auth",
+      "documented": "append your API key as ?api_key=... query parameter on every request",
+      "actual": "rejected with 401; key must go in an X-API-Key request header",
+      "how_found": "read the 401 error body instead of discarding it",
+      "impact": "every request built per the docs fails auth",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "response has a `token` field; tokens last 24h; there is no refresh flow",
+      "actual": "response has `access_token` and `refresh_token` fields; `expires_in` is 900 (15 min); `/auth/refresh` exists and works",
+      "how_found": "printed the raw login response body",
+      "impact": "a frontend built to the docs would silently break 15 minutes in, failing the 'still working 30 minutes after login' requirement",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "paginate with page & limit (max 200); response is {total, page, page_size, results}",
+      "actual": "pagination is offset-based; response is {limit, offset, count, total, has_more, results}; page is silently ignored; effective limit is 50",
+      "how_found": "compared page=1 and page=2 responses and tested a requested limit of 200",
+      "impact": "a client built to the documented contract repeats the first batch and cannot traverse the collection",
+      "evidence": ["MAG-1002627", "100-1003403", "MAG-1003078"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "the collection response reports the exact total number of matching records",
+      "actual": "total=4422, but offset pagination returns 4700 unique listings before has_more becomes false",
+      "how_found": "paged with offset to the final response and compared total with the retrieved unique IDs",
+      "impact": "clients trusting total stop early and miss 278 listings",
+      "evidence": ["ZER-1004440", "100-1003836", "SQU-1003024"]
+    },
+    {
+      "endpoint": "/v1/listing/{id}",
+      "category": "missing_endpoint",
+      "documented": "a single listing is available at /v1/listing/{listing_id}",
+      "actual": "the singular path returns 404; /v1/listings/{listing_id} returns 200",
+      "how_found": "requested both literal paths for MAG-1002627",
+      "impact": "detail-page clients built to the documented path cannot load listings",
+      "evidence": ["MAG-1002627"]
+    },
+    {
+      "endpoint": "/v1/listings/{id}/similar",
+      "category": "missing_endpoint",
+      "documented": "returns up to ten comparable listings",
+      "actual": "the documented path returns 404",
+      "how_found": "requested the path for MAG-1002627",
+      "impact": "the documented comparable-listings feature cannot be implemented against this route",
+      "evidence": ["MAG-1002627"]
+    },
+    {
+      "endpoint": "/v1/favourites",
+      "category": "missing_endpoint",
+      "documented": "logged-in users can list and save favourites",
+      "actual": "GET, POST, and DELETE favourites requests return 404; tested spelling and trailing-slash variants also return 404",
+      "how_found": "called the documented operations with valid authentication",
+      "impact": "the documented saved-listings workflow cannot use this API",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/analytics/summary",
+      "category": "missing_endpoint",
+      "documented": "returns pre-computed city aggregates",
+      "actual": "the endpoint returns 404 Not Found",
+      "how_found": "called it with a valid API key and bearer token",
+      "impact": "a dashboard built from the documented analytics endpoint has no response to display",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "completeness",
+      "documented": "returns active sale listings; inactive listings are excluded server side",
+      "actual": "the collection includes records with is_live=false",
+      "how_found": "inspected is_live across the corrected full listing pull",
+      "impact": "clients must filter inactive records themselves",
+      "evidence": ["100-1003403", "100-1004588", "SQU-1000911", "ZER-1002667"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "sorting",
+      "documented": "sort_by and order sort the collection",
+      "actual": "order=desc and omitted order returned the same first five carpet_area records",
+      "how_found": "compared live responses for sort_by=carpet_area with and without order",
+      "impact": "users cannot rely on the documented sort direction",
+      "evidence": ["MAG-1002328", "DWE-1001486", "ZER-1004285", "DWE-1001328", "MAG-1001795"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "data_quality",
+      "documented": "money is an integer amount in Indian rupees",
+      "actual": "some listing price values are negative",
+      "how_found": "checked price values across the corrected full listing pull",
+      "impact": "negative prices are impossible as sale prices and break totals, sorting, and display",
+      "evidence": ["ZER-1001207", "DWE-1001183", "SQU-1002843"]
+    },
+    {
+      "endpoint": "/v1/projects/{id}",
+      "category": "units",
+      "documented": "price_min and price_max are integer rupee amounts",
+      "actual": "project prices are decimal crore-scale values; P10068 price_max=99.8 means 998000000 INR",
+      "how_found": "inspected project records and compared their scale with the documented rupee unit",
+      "impact": "displaying these values as rupees produces prices off by orders of magnitude",
+      "evidence": ["P10001", "P10002", "P10003"]
+    },
+    {
+      "endpoint": "/v1/rentals",
+      "category": "pagination",
+      "documented": "the collection response reports the exact total number of matching records",
+      "actual": "total=1788, but offset pagination returns 1900 unique rentals before has_more becomes false",
+      "how_found": "paged with offset to the final response and compared total with the retrieved unique IDs",
+      "impact": "clients trusting total stop early and miss 112 rentals",
+      "evidence": ["R1001801", "R1001850", "R1001900"]
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "pagination",
+      "documented": "the collection response reports the exact total number of matching records",
+      "actual": "total=489, but offset pagination returns 520 unique projects before has_more becomes false",
+      "how_found": "paged with offset to the final response and compared total with the retrieved unique IDs",
+      "impact": "clients trusting total stop early and miss 31 projects",
+      "evidence": ["P10500", "P10501", "P10520"]
+    }
+  ]
+}
