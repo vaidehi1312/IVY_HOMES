@@ -3,8 +3,8 @@
   "candidate": {
     "name": "Vaidehi Mayankkumar Patel",
     "email": "vaidehi.20233579@mnnit.ac.in",
-    "repo_url": "www.github.com/vaidehi1312/IVY_HOMES",
-    "demo_url": "http://localhost:3000"
+    "repo_url": "https://github.com/vaidehi1312/IVY_HOMES",
+    "demo_url": "https://ivy-frontend-pi.vercel.app"
   },
   "answers": {
     "total_listing_records": 4700,
